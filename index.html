@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Daily Prep Coach</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f0f0d;--bg2:#181816;--bg3:#212120;--bg4:#2a2a28;
+  --border:#333330;--border2:#444440;
+  --text:#e8e6df;--text2:#a8a69f;--text3:#6a6860;
+  --accent:#b8f0a0;--accent2:#1a2e14;--accent3:#2c4a20;
+  --info:#7eb8f0;--info-bg:#0d1e30;--info-border:rgba(126,184,240,.2);
+  --warn:#f0c87e;--warn-bg:#2e2010;--warn-border:rgba(240,200,126,.2);
+  --danger:#f09090;--danger-bg:#2e1010;--danger-border:rgba(240,144,144,.2);
+  --purple:#c4a8f0;--purple-bg:#1a1430;
+  --amber:#f0c060;--amber-bg:#2a1e08;
+  --r:6px;--r2:10px;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',sans-serif;
+}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
+.app{max-width:760px;margin:0 auto;padding:2rem 1rem 4rem}
+
+.app-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-mark{font-family:var(--mono);font-size:12px;background:var(--accent2);color:var(--accent);padding:4px 8px;border-radius:var(--r);border:1px solid var(--accent3)}
+.logo-text{font-size:15px;font-weight:600;letter-spacing:-.3px}
+.logo-sub{font-size:11px;color:var(--text3);font-family:var(--mono)}
+.header-right{display:flex;align-items:center;gap:8px}
+.stats-row{display:flex;gap:6px}
+.stat-pill{font-family:var(--mono);font-size:11px;color:var(--text3);background:var(--bg3);border:1px solid var(--border);padding:3px 8px;border-radius:20px}
+.stat-pill span{color:var(--accent);font-weight:500}
+.settings-btn{font-family:var(--mono);font-size:11px;color:var(--text3);background:transparent;border:1px solid var(--border);padding:3px 8px;border-radius:var(--r);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px}
+.settings-btn:hover{border-color:var(--border2);color:var(--text2)}
+.conn-dot{display:inline-block;width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.conn-dot.ok{background:var(--accent)}
+.conn-dot.err{background:var(--danger)}
+.conn-dot.local{background:var(--warn)}
+.conn-dot.checking{background:var(--text3);animation:pulse 1s ease-in-out infinite}
+
+.tabs{display:flex;gap:2px;margin-bottom:1.5rem;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:3px}
+.tab{flex:1;padding:7px 0;font-size:13px;font-weight:500;font-family:var(--sans);background:transparent;border:none;color:var(--text3);cursor:pointer;border-radius:8px;transition:all .15s}
+.tab.active{background:var(--bg4);color:var(--text);border:1px solid var(--border2)}
+.tab:hover:not(.active){color:var(--text2)}
+
+/* settings */
+.settings-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:16px;margin-bottom:1.5rem}
+.settings-panel h4{font-size:12px;font-weight:500;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.s-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.s-field{display:flex;flex-direction:column;gap:5px}
+.s-field.full{grid-column:span 2}
+.s-field label{font-size:11px;color:var(--text3);font-family:var(--mono)}
+.s-field input{font-family:var(--mono);font-size:12px;background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:var(--r);padding:7px 9px;outline:none;transition:border-color .15s}
+.s-field input:focus{border-color:var(--accent3)}
+.s-actions{display:flex;gap:8px;flex-wrap:wrap}
+.s-btn{font-family:var(--mono);font-size:12px;padding:6px 12px;border-radius:var(--r);cursor:pointer;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);transition:all .15s}
+.s-btn:hover{background:var(--bg4);color:var(--text)}
+.s-btn.primary{background:var(--accent2);color:var(--accent);border-color:var(--accent3)}
+.s-btn.primary:hover{background:var(--accent3)}
+.s-status{font-family:var(--mono);font-size:11px;padding:6px 10px;border-radius:var(--r);margin-top:8px;display:none}
+.s-status.ok{background:var(--accent2);color:var(--accent);border:1px solid var(--accent3);display:block}
+.s-status.err{background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-border);display:block}
+.s-status.info{background:var(--info-bg);color:var(--info);border:1px solid var(--info-border);display:block}
+.s-note{font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:10px;line-height:1.6;padding:8px 10px;background:var(--bg3);border-radius:var(--r)}
+
+/* banners */
+.banner{border-radius:var(--r);padding:8px 12px;font-size:12px;font-family:var(--mono);margin-bottom:12px;display:flex;align-items:flex-start;gap:8px}
+.banner.info{background:var(--info-bg);color:var(--info);border:1px solid var(--info-border)}
+.banner.warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-border)}
+.banner.ok{background:var(--accent2);color:var(--accent);border:1px solid var(--accent3)}
+.pulse-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:4px;animation:pulse 2s ease-in-out infinite}
+.banner.info .pulse-dot{background:var(--info)}
+.banner.warn .pulse-dot{background:var(--warn)}
+.banner.ok .pulse-dot{background:var(--accent)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* form */
+.section-label{font-family:var(--mono);font-size:11px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.6rem}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field.full{grid-column:span 2}
+.field label{font-size:12px;color:var(--text3);font-family:var(--mono)}
+.field input,.field textarea{font-family:var(--mono);font-size:13px;background:var(--bg2);color:var(--text);border:1px solid var(--border2);border-radius:var(--r);padding:8px 10px;outline:none;transition:border-color .15s}
+.field input:focus,.field textarea:focus{border-color:var(--accent3)}
+.field textarea{resize:vertical;min-height:68px}
+
+.generate-btn{width:100%;padding:11px;font-size:14px;font-weight:600;font-family:var(--sans);cursor:pointer;background:var(--accent2);color:var(--accent);border:1px solid var(--accent3);border-radius:var(--r);transition:all .15s}
+.generate-btn:hover{background:var(--accent3)}
+.generate-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* blocks */
+.output{margin-top:1.5rem}
+.blocks-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.day-tag{font-family:var(--mono);font-size:11px;background:var(--accent2);color:var(--accent);padding:3px 10px;border-radius:20px;border:1px solid var(--accent3)}
+.session-meta{font-size:11px;color:var(--text3);font-family:var(--mono)}
+.block-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);margin-bottom:8px;overflow:hidden}
+.block-header{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;user-select:none;transition:background .1s}
+.block-header:hover{background:var(--bg3)}
+.block-num{font-family:var(--mono);font-size:11px;color:var(--text3);min-width:22px}
+.block-icon{font-family:var(--mono);font-size:12px;font-weight:500;padding:3px 7px;border-radius:4px;flex-shrink:0}
+.block-title{font-size:13px;font-weight:500;flex:1}
+.block-time{font-family:var(--mono);font-size:11px;color:var(--text3)}
+.chevron{font-size:10px;color:var(--text3);transition:transform .2s}
+.chevron.open{transform:rotate(180deg)}
+.block-body{padding:14px 16px;font-size:13px;color:var(--text2);line-height:1.75;display:none;border-top:1px solid var(--border)}
+.block-body.open{display:block}
+.block-body p{margin:3px 0}
+.block-body pre{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:10px 12px;font-family:var(--mono);font-size:11px;overflow-x:auto;white-space:pre-wrap;color:var(--text);margin:8px 0}
+.block-body code{background:var(--bg3);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:11px;color:var(--info)}
+.block-body strong{font-weight:500;color:var(--text)}
+.block-body li{margin-bottom:3px}
+.block-body ul{padding-left:16px;margin:4px 0}
+.block-body h3,.block-body h4{font-size:12px;font-weight:500;color:var(--text);margin:10px 0 4px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em}
+.block-body a{color:var(--info);text-decoration:none}
+.block-body a:hover{text-decoration:underline}
+
+/* complete panel */
+.complete-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px 16px;margin-top:8px}
+.complete-panel h4{font-size:12px;font-weight:500;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px}
+.time-blocks{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.time-block{display:flex;flex-direction:column;gap:4px;align-items:center}
+.time-block label{font-size:10px;color:var(--text3);font-family:var(--mono)}
+.time-block input{width:100%;font-family:var(--mono);font-size:13px;text-align:center;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:5px;color:var(--text);outline:none}
+.time-block input:focus{border-color:var(--accent3)}
+.notes-row{margin-bottom:12px}
+.notes-row label{font-size:12px;color:var(--text3);font-family:var(--mono);display:block;margin-bottom:4px}
+.notes-row textarea{width:100%;font-family:var(--mono);font-size:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:8px 10px;color:var(--text);outline:none;resize:vertical;min-height:60px}
+.notes-row textarea:focus{border-color:var(--accent3)}
+.complete-btn{width:100%;padding:9px;font-size:13px;font-weight:600;font-family:var(--sans);cursor:pointer;background:var(--bg3);color:var(--text2);border:1px solid var(--border2);border-radius:var(--r);transition:all .15s}
+.complete-btn:hover{background:var(--accent2);color:var(--accent);border-color:var(--accent3)}
+.saved-badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;background:var(--accent2);color:var(--accent);padding:6px 12px;border-radius:20px;border:1px solid var(--accent3)}
+
+/* history */
+.history-empty{text-align:center;padding:3rem 0;color:var(--text3);font-size:13px;font-family:var(--mono)}
+.history-entry{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);margin-bottom:8px;overflow:hidden}
+.history-header{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;transition:background .1s}
+.history-header:hover{background:var(--bg3)}
+.h-day{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--accent);min-width:52px}
+.h-date{font-family:var(--mono);font-size:11px;color:var(--text3)}
+.h-preview{font-size:12px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 8px}
+.h-hours{font-family:var(--mono);font-size:11px;color:var(--text3);white-space:nowrap}
+.history-body{display:none;border-top:1px solid var(--border);padding:12px 14px}
+.history-body.open{display:block}
+.h-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px}
+.h-section h5{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:4px}
+.h-section p{color:var(--text2);line-height:1.5}
+.h-section.full{grid-column:span 2}
+.h-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+.h-tag{font-family:var(--mono);font-size:10px;background:var(--bg3);border:1px solid var(--border2);padding:2px 7px;border-radius:20px;color:var(--text2)}
+.h-tag.blocker{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger)}
+
+/* topic index */
+.topic-block{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);margin-bottom:8px;padding:14px 16px}
+.topic-block h4{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+.topic-tags{display:flex;flex-wrap:wrap;gap:6px}
+.topic-tag{font-family:var(--mono);font-size:11px;background:var(--bg3);border:1px solid var(--border2);padding:3px 8px;border-radius:20px;color:var(--text2)}
+.topic-empty{font-family:var(--mono);font-size:12px;color:var(--text3);padding:2rem 0;text-align:center}
+.export-bar{display:flex;gap:8px;margin-bottom:1rem}
+.export-btn{font-family:var(--mono);font-size:11px;padding:5px 10px;border-radius:var(--r);cursor:pointer;background:var(--bg2);border:1px solid var(--border2);color:var(--text3);transition:all .15s}
+.export-btn:hover{color:var(--text);border-color:var(--border2)}
+
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:16px;font-size:13px;color:var(--text3);font-family:var(--mono)}
+.error-card{background:var(--danger-bg);border:1px solid var(--danger-border);border-radius:var(--r2);padding:12px 14px;font-size:13px;color:var(--danger);font-family:var(--mono)}
+
+@media(max-width:520px){
+  .form-grid,.s-grid{grid-template-columns:1fr}
+  .field.full,.s-field.full{grid-column:span 1}
+  .time-blocks{grid-template-columns:repeat(2,1fr)}
+  .h-grid{grid-template-columns:1fr}
+  .h-section.full{grid-column:span 1}
+  .stats-row{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <div class="app-header">
+    <div class="logo">
+      <div class="logo-mark">DPC</div>
+      <div>
+        <div class="logo-text">Daily Prep Coach</div>
+        <div class="logo-sub">90-day backend bootcamp</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="stats-row">
+        <div class="stat-pill">day <span id="stat-day">—</span>/90</div>
+        <div class="stat-pill"><span id="stat-streak">0</span> streak</div>
+        <div class="stat-pill"><span id="stat-topics">0</span> topics</div>
+      </div>
+      <button class="settings-btn" onclick="toggleSettings()">
+        <span class="conn-dot checking" id="conn-dot"></span>settings
+      </button>
+    </div>
+  </div>
+
+  <!-- SETTINGS PANEL -->
+  <div id="settings-panel" style="display:none">
+    <div class="settings-panel">
+      <h4>Connection settings</h4>
+      <div class="s-grid">
+        <div class="s-field full">
+          <label>Backend URL (leave empty to use this same host)</label>
+          <input type="url" id="cfg-url" placeholder="https://daily-prep-coach.herokuapp.com"/>
+        </div>
+        <div class="s-field full">
+          <label>Your user key — save this in a password manager</label>
+          <input type="text" id="cfg-key" placeholder="auto-generated"/>
+        </div>
+      </div>
+      <div class="s-actions">
+        <button class="s-btn primary" onclick="saveSettings()">Save & test</button>
+        <button class="s-btn" onclick="generateUserKey()">New key</button>
+        <button class="s-btn" onclick="forceSyncToBackend()">Force reseed backend</button>
+        <button class="s-btn" onclick="toggleSettings()">Close</button>
+      </div>
+      <div id="s-status" class="s-status"></div>
+      <div class="s-note">
+        Backend stores your data in SQLite. If the dyno restarts, your browser auto-reseeds it from localStorage on next load — nothing is ever lost. Export Backup JSON is your offline safety copy.
+      </div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" id="tab-plan-btn"    onclick="showTab('plan')">Today's plan</button>
+    <button class="tab"        id="tab-history-btn" onclick="showTab('history')">History</button>
+    <button class="tab"        id="tab-topics-btn"  onclick="showTab('topics')">Topic index</button>
+  </div>
+
+  <!-- PLAN TAB -->
+  <div id="tab-plan">
+    <div id="banner-wrap"></div>
+    <div class="section-label">Session setup</div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Day number</label>
+        <input type="number" id="dayNum" min="1" max="90" value="1"/>
+      </div>
+      <div class="field">
+        <label>Available hours</label>
+        <input type="number" id="hours" min="1" max="16" value="6" step="0.5"/>
+      </div>
+      <div class="field full">
+        <label>Blockers / focus notes (optional)</label>
+        <textarea id="blocker" placeholder="e.g. Redis TTL confusing, want more graph traversal..."></textarea>
+      </div>
+    </div>
+    <button class="generate-btn" id="genBtn" onclick="generatePlan()">Generate today's plan →</button>
+    <div id="output"></div>
+  </div>
+
+  <!-- HISTORY TAB -->
+  <div id="tab-history" style="display:none">
+    <div class="section-label">Completed sessions</div>
+    <div id="history-list"></div>
+  </div>
+
+  <!-- TOPICS TAB -->
+  <div id="tab-topics" style="display:none">
+    <div class="section-label">Cumulative topic index</div>
+    <div class="export-bar">
+      <button class="export-btn" onclick="exportData()">Export backup JSON</button>
+      <button class="export-btn" onclick="importData()">Import backup</button>
+    </div>
+    <div id="topic-index-view"></div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════
+const LS_CFG     = 'dpc_config';
+const LS_SESS    = 'dpc_sessions';
+const LS_TOPICS  = 'dpc_topics';
+
+let cfg       = { url: '', userKey: '' };
+let backendOk = false;
+
+function getBaseURL() {
+  // If cfg.url is set, use it. Otherwise use same origin (when served from Express).
+  return (cfg.url || window.location.origin).replace(/\/$/, '');
+}
+
+// ═══════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════
+function loadConfig() {
+  try { cfg = { ...cfg, ...JSON.parse(localStorage.getItem(LS_CFG) || '{}') }; } catch {}
+  if (!cfg.userKey) { cfg.userKey = crypto.randomUUID(); saveConfig(); }
+  document.getElementById('cfg-url').value = cfg.url || '';
+  document.getElementById('cfg-key').value = cfg.userKey;
+}
+
+function saveConfig() {
+  localStorage.setItem(LS_CFG, JSON.stringify(cfg));
+}
+
+function generateUserKey() {
+  document.getElementById('cfg-key').value = crypto.randomUUID();
+}
+
+function toggleSettings() {
+  const p = document.getElementById('settings-panel');
+  p.style.display = p.style.display === 'none' ? '' : 'none';
+}
+
+async function saveSettings() {
+  cfg.url     = document.getElementById('cfg-url').value.trim().replace(/\/$/, '');
+  cfg.userKey = document.getElementById('cfg-key').value.trim() || cfg.userKey;
+  saveConfig();
+  const st = document.getElementById('s-status');
+  st.className = 's-status info';
+  st.textContent = 'Testing connection…';
+  await testConnection(true);
+}
+
+async function testConnection(verbose = false) {
+  const st = document.getElementById('s-status');
+  try {
+    const res = await fetch(`${getBaseURL()}/health`, { signal: AbortSignal.timeout(8000) });
+    const d   = await res.json();
+    if (d.ok) {
+      backendOk = true;
+      setDot('ok');
+      if (verbose) { st.className = 's-status ok'; st.textContent = `Connected ✓  ${getBaseURL()}`; }
+      return true;
+    }
+  } catch (e) {
+    backendOk = false;
+    setDot(cfg.url ? 'err' : 'local');
+    if (verbose) { st.className = 's-status err'; st.textContent = `Connection failed: ${e.message}`; }
+  }
+  return false;
+}
+
+function setDot(state) {
+  const d = document.getElementById('conn-dot');
+  d.className = 'conn-dot ' + state;
+}
+
+// ═══════════════════════════════════════════════════════
+// STORAGE — localStorage (primary) + backend (mirror)
+// ═══════════════════════════════════════════════════════
+function lsSessions() {
+  try { return JSON.parse(localStorage.getItem(LS_SESS) || '[]'); } catch { return []; }
+}
+function lsTopics() {
+  try { return JSON.parse(localStorage.getItem(LS_TOPICS) || '{}'); } catch { return {}; }
+}
+function lsSaveSessions(sessions) {
+  localStorage.setItem(LS_SESS, JSON.stringify(sessions));
+}
+function lsSaveTopics(topics) {
+  localStorage.setItem(LS_TOPICS, JSON.stringify(topics));
+}
+
+function apiHeaders() {
+  return { 'Content-Type': 'application/json', 'x-user-key': cfg.userKey };
+}
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(`${getBaseURL()}${path}`, {
+    ...opts,
+    headers: { ...apiHeaders(), ...(opts.headers || {}) },
+    signal: opts.signal || AbortSignal.timeout(12000),
+  });
+  return res.json();
+}
+
+// Save session: localStorage always, backend if available
+async function saveSession(session) {
+  const sessions = lsSessions();
+  const idx = sessions.findIndex(s => s.day === session.day);
+  if (idx >= 0) sessions[idx] = session; else sessions.push(session);
+  sessions.sort((a, b) => a.day - b.day);
+  lsSaveSessions(sessions);
+
+  if (backendOk) {
+    try { await apiFetch('/api/sessions', { method: 'POST', body: JSON.stringify(session) }); }
+    catch (e) { console.warn('Backend session save failed (local OK):', e.message); }
+  }
+}
+
+// Merge and save topics
+async function saveTopics(newTopics) {
+  const existing = lsTopics();
+  const merged   = mergeTopics(existing, newTopics);
+  lsSaveTopics(merged);
+
+  if (backendOk) {
+    try { await apiFetch('/api/topics', { method: 'POST', body: JSON.stringify(newTopics) }); }
+    catch (e) { console.warn('Backend topics save failed (local OK):', e.message); }
+  }
+  return merged;
+}
+
+// Reseed backend from localStorage after dyno restart
+async function reseedIfNeeded() {
+  if (!backendOk) return;
+  try {
+    const remoteSessions = await apiFetch('/api/sessions');
+    if (remoteSessions.length === 0) {
+      const localSessions = lsSessions();
+      const localTopics   = lsTopics();
+      if (localSessions.length > 0) {
+        await apiFetch('/api/reseed', {
+          method: 'POST',
+          body: JSON.stringify({ sessions: localSessions, topic_index: localTopics }),
+        });
+        console.log(`[reseed] pushed ${localSessions.length} sessions to backend`);
+        showBanner('ok', `Backend reseeded with ${localSessions.length} sessions from local backup.`);
+        setTimeout(() => document.getElementById('banner-wrap').innerHTML = '', 5000);
+      }
+    }
+  } catch (e) {
+    console.warn('Reseed check failed:', e.message);
+  }
+}
+
+async function forceSyncToBackend() {
+  const st = document.getElementById('s-status');
+  if (!backendOk) { st.className = 's-status err'; st.textContent = 'Backend not connected.'; return; }
+  st.className = 's-status info';
+  st.textContent = 'Syncing…';
+  try {
+    const d = await apiFetch('/api/reseed', {
+      method: 'POST',
+      body: JSON.stringify({ sessions: lsSessions(), topic_index: lsTopics() }),
+    });
+    st.className = 's-status ok';
+    st.textContent = `Synced ${d.reseeded} sessions to backend ✓`;
+  } catch (e) {
+    st.className = 's-status err';
+    st.textContent = 'Sync failed: ' + e.message;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// TOPIC HELPERS
+// ═══════════════════════════════════════════════════════
+function mergeTopics(existing, incoming) {
+  const merged = {};
+  for (const k of new Set([...Object.keys(existing), ...Object.keys(incoming)])) {
+    const combined = [...(existing[k] || []), ...(incoming[k] || [])];
+    const seen = new Set();
+    merged[k] = combined.filter(item => {
+      const n = item.toLowerCase().trim();
+      return seen.has(n) ? false : (seen.add(n), true);
+    });
+  }
+  return merged;
+}
+
+function buildMemoryContext(topicIndex, sessions) {
+  const lines = [];
+  if (Object.keys(topicIndex).length) {
+    lines.push('COVERED TOPICS — DO NOT REPEAT ANY OF THESE:');
+    if (topicIndex.dsa?.length)     lines.push('DSA: '            + topicIndex.dsa.join(' | '));
+    if (topicIndex.backend?.length) lines.push('Backend: '        + topicIndex.backend.join(' | '));
+    if (topicIndex.system?.length)  lines.push('System Design: '  + topicIndex.system.join(' | '));
+    if (topicIndex.impl?.length)    lines.push('Implementation: ' + topicIndex.impl.join(' | '));
+  }
+  if (sessions.length) {
+    lines.push('\nRECENT SESSIONS (last 5, for continuity):');
+    sessions.slice(-5).forEach(s => {
+      const tpb = s.timePerBlock || {};
+      const t   = Object.keys(tpb).length
+        ? Object.entries(tpb).map(([k,v]) => `${k}:${v}h`).join(' ')
+        : `${s.hours||'?'}h`;
+      lines.push(
+        `Day ${s.day} [${t}]` +
+        (s.blocker ? ` | Blocker: "${s.blocker.slice(0,80)}"` : '') +
+        (s.notes   ? ` | Note: ${s.notes.slice(0,80)}`        : '')
+      );
+    });
+  }
+  return lines.join('\n');
+}
+
+// ═══════════════════════════════════════════════════════
+// PLAN GENERATION
+// ═══════════════════════════════════════════════════════
+const BLOCKS = [
+  { key:'dsa',     label:'DSA',                icon:'{}', color:'var(--accent)',  iconBg:'var(--accent2)' },
+  { key:'backend', label:'Backend engineering', icon:'BE', color:'var(--info)',   iconBg:'var(--info-bg)' },
+  { key:'system',  label:'System design',       icon:'SD', color:'var(--purple)', iconBg:'var(--purple-bg)' },
+  { key:'impl',    label:'Implementation',      icon:'>_', color:'var(--amber)',  iconBg:'var(--amber-bg)' },
+];
+
+async function generatePlan() {
+  const day     = parseInt(document.getElementById('dayNum').value) || 1;
+  const hours   = parseFloat(document.getElementById('hours').value) || 6;
+  const blocker = document.getElementById('blocker').value.trim();
+  const btn     = document.getElementById('genBtn');
+  const out     = document.getElementById('output');
+
+  btn.disabled = true;
+  btn.textContent = 'Building plan…';
+
+  const sessions    = lsSessions();
+  const topicIndex  = lsTopics();
+  const memCtx      = buildMemoryContext(topicIndex, sessions);
+  const totalTopics = Object.values(topicIndex).flat().length;
+  const donedays    = sessions.map(s => s.day);
+
+  out.innerHTML = `<div class="loading-card"><span class="spinner"></span>Generating Day ${day} plan — ${totalTopics} topics in memory…</div>`;
+
+  const systemPrompt = `You are an elite backend engineering mentor with 15+ years of experience building distributed systems and mentoring engineers for high-paying backend roles.
+
+Generate a DAILY EXECUTION PLAN for Day ${day} of a 90-day backend engineering bootcamp.
+
+Bootcamp roadmap: DSA, Backend Engineering (FastAPI/Python, PostgreSQL, Redis, Docker, Celery), System Design, Implementation Projects.
+
+${memCtx ? memCtx + '\n\n' : ''}${donedays.length ? `Completed days: ${donedays.join(', ')}. Progress logically forward.\n\n` : 'This is Day 1. Start from fundamentals.\n\n'}Respond ONLY with a raw JSON object — no markdown fences, no preamble, nothing else:
+{
+  "dsa": "...",
+  "backend": "...",
+  "system": "...",
+  "impl": "...",
+  "topics": {
+    "dsa": ["short label 1", "short label 2"],
+    "backend": ["concept covered"],
+    "system": ["architecture topic"],
+    "impl": ["feature built"]
+  }
+}
+
+Each main field covers ~${Math.round(hours/4*10)/10} hours. Requirements:
+- dsa: Exact LeetCode problem names + numbers, pattern, solving strategy, time/space complexity, hints.
+- backend: Exact concept + specific docs URL, exact section to read, then concrete install/config/test commands.
+- system: Architecture topic with components, ASCII flow diagram, tradeoffs, scaling notes.
+- impl: Concrete feature with folder structure, working code snippet, exact terminal commands.
+- topics: Short 3-8 word labels per block — used for cumulative dedup index, must never repeat covered topics.
+
+Use markdown (**bold**, \`code\`, - bullets, \`\`\`blocks\`\`\`) inside strings. Never repeat anything from the covered topics list.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: `Day: ${day}\nAvailable time: ${hours} hours\nBlocker: ${blocker || 'none'}` }],
+      }),
+    });
+    const data = await res.json();
+    const raw  = (data.content || []).map(c => c.text || '').join('');
+    let sections = {};
+    try { sections = JSON.parse(raw.replace(/```json|```/g, '').trim()); }
+    catch { sections = { dsa: raw, backend: '', system: '', impl: '', topics: {} }; }
+    out.innerHTML = renderBlocks(sections, day, hours, blocker);
+  } catch (err) {
+    out.innerHTML = `<div class="error-card">Error: ${err.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Regenerate plan →';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════
+function formatContent(text) {
+  if (!text) return '<em style="color:var(--text3)">No content.</em>';
+  const esc   = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const lines = esc.split('\n');
+  let html = '', inCode = false, codeLines = [];
+  for (const line of lines) {
+    const t = line.trim();
+    if (t.startsWith('```')) {
+      if (!inCode) { inCode = true; codeLines = []; }
+      else { html += `<pre>${codeLines.join('\n')}</pre>`; inCode = false; }
+      continue;
+    }
+    if (inCode) { codeLines.push(line); continue; }
+    let l = line
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+      .replace(/(https?:\/\/[^\s<"]+)/g, m => `<a href="${m}" target="_blank">${m}</a>`);
+    if (t.startsWith('####') || t.startsWith('###') || t.startsWith('##'))
+      html += `<h4>${l.replace(/^#+\s*/, '')}</h4>`;
+    else if (t.startsWith('- ') || t.startsWith('• ') || t.startsWith('* '))
+      html += `<li>${l.replace(/^[\-•*]\s*/, '')}</li>`;
+    else if (t === '')
+      html += '<br>';
+    else
+      html += `<p>${l}</p>`;
+  }
+  return html;
+}
+
+function escJ(s) {
+  return JSON.stringify(s).slice(1, -1); // escape for inline JS string
+}
+
+function renderBlocks(sections, day, hours, blocker) {
+  const tEach = Math.round((parseFloat(hours) || 6) / 4 * 10) / 10;
+  const snap  = {
+    dsa:     (sections.dsa     || '').slice(0, 400),
+    backend: (sections.backend || '').slice(0, 400),
+    system:  (sections.system  || '').slice(0, 400),
+    impl:    (sections.impl    || '').slice(0, 400),
+    topics:  sections.topics   || {},
+  };
+  const snapJS = escJ(JSON.stringify(snap));
+  const blkrJS = escJ(blocker);
+
+  return `
+  <div class="blocks-header">
+    <span class="day-tag">Day ${day}</span>
+    <span class="session-meta">${hours}h · ${new Date().toLocaleDateString('en-CA')}</span>
+  </div>
+  ${BLOCKS.map((b, i) => `
+  <div class="block-card">
+    <div class="block-header" onclick="toggleBlock('${b.key}')">
+      <span class="block-num">0${i+1}</span>
+      <span class="block-icon" style="background:${b.iconBg};color:${b.color}">${b.icon}</span>
+      <span class="block-title" style="color:${b.color}">${b.label}</span>
+      <span class="block-time">~${tEach}h</span>
+      <span class="chevron open" id="chev-${b.key}">▾</span>
+    </div>
+    <div class="block-body open" id="body-${b.key}">${formatContent(sections[b.key] || '')}</div>
+  </div>`).join('')}
+  <div class="complete-panel">
+    <h4>Log this session →</h4>
+    <div class="time-blocks">
+      ${BLOCKS.map(b => `
+      <div class="time-block">
+        <label>${b.label.split(' ')[0]}</label>
+        <input type="number" id="time-${b.key}" min="0" max="16" step="0.5" value="${tEach}"/>
+      </div>`).join('')}
+    </div>
+    <div class="notes-row">
+      <label>Notes / reflections</label>
+      <textarea id="day-notes" placeholder="What clicked? What needs more work? Carry-forward insights..."></textarea>
+    </div>
+    <div id="complete-btn-wrap">
+      <button class="complete-btn" onclick="completeDay(${day}, '${blkrJS}', '${snapJS}')">
+        Save Day ${day} to memory ✓
+      </button>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// COMPLETE DAY
+// ═══════════════════════════════════════════════════════
+async function completeDay(day, blocker, snapStr) {
+  let snap = {};
+  try { snap = JSON.parse(snapStr); } catch {}
+
+  const timePerBlock = {
+    dsa:     parseFloat(document.getElementById('time-dsa').value)     || 0,
+    backend: parseFloat(document.getElementById('time-backend').value) || 0,
+    system:  parseFloat(document.getElementById('time-system').value)  || 0,
+    impl:    parseFloat(document.getElementById('time-impl').value)    || 0,
+  };
+  const notes  = document.getElementById('day-notes').value.trim();
+  const totalH = Object.values(timePerBlock).reduce((a, b) => a + b, 0);
+
+  const session = {
+    day,
+    date: new Date().toISOString().split('T')[0],
+    hours: totalH,
+    blocker,
+    notes,
+    timePerBlock,
+    planSnapshot: {
+      dsa:     snap.dsa     || '',
+      backend: snap.backend || '',
+      system:  snap.system  || '',
+      impl:    snap.impl    || '',
+    },
+  };
+
+  const merged = await saveTopics(snap.topics || {});
+  await saveSession(session);
+  await updateHeaderStats();
+
+  const topicCount = Object.values(merged).flat().length;
+
+  document.getElementById('complete-btn-wrap').innerHTML =
+    `<div class="saved-badge">✓ Day ${day} saved — ${totalH.toFixed(1)}h · ${topicCount} topics indexed</div>`;
+
+  document.getElementById('dayNum').value  = day + 1;
+  document.getElementById('blocker').value = '';
+  showBanner('ok', `Day ${day} saved. ${topicCount} unique topics in memory. Next plan builds on this.`);
+}
+
+// ═══════════════════════════════════════════════════════
+// HISTORY
+// ═══════════════════════════════════════════════════════
+function renderHistory() {
+  const sessions = lsSessions();
+  const el = document.getElementById('history-list');
+  if (!sessions.length) {
+    el.innerHTML = '<div class="history-empty">No sessions recorded yet.</div>'; return;
+  }
+  el.innerHTML = [...sessions].reverse().map((s, idx) => {
+    const tpb    = s.timePerBlock || {};
+    const totalH = s.hours || Object.values(tpb).reduce((a, b) => a + b, 0) || 0;
+    const snap   = s.planSnapshot || {};
+    return `<div class="history-entry">
+      <div class="history-header" onclick="toggleHistory(${idx})">
+        <span class="h-day">Day ${s.day}</span>
+        <span class="h-date">${s.date || '—'}</span>
+        <span class="h-preview">${(snap.dsa || '').slice(0, 70)}…</span>
+        <span class="h-hours">${totalH.toFixed(1)}h</span>
+      </div>
+      <div class="history-body" id="hbody-${idx}">
+        <div class="h-grid">
+          <div class="h-section">
+            <h5>Time</h5>
+            <div class="h-tags">${Object.entries(tpb).map(([k,v]) => `<span class="h-tag">${k} ${v}h</span>`).join('')}</div>
+          </div>
+          <div class="h-section">
+            <h5>Blocker</h5>
+            <div class="h-tags">
+              ${s.blocker ? `<span class="h-tag blocker">${s.blocker.slice(0,60)}</span>` : '<span class="h-tag">none</span>'}
+            </div>
+          </div>
+          ${snap.dsa     ? `<div class="h-section full"><h5>DSA</h5><p>${snap.dsa.slice(0,200)}</p></div>` : ''}
+          ${snap.backend ? `<div class="h-section full"><h5>Backend</h5><p>${snap.backend.slice(0,200)}</p></div>` : ''}
+          ${s.notes      ? `<div class="h-section full"><h5>Notes</h5><p>${s.notes.slice(0,300)}</p></div>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// TOPIC INDEX TAB
+// ═══════════════════════════════════════════════════════
+function renderTopicIndex() {
+  const idx = lsTopics();
+  const el  = document.getElementById('topic-index-view');
+  const total = Object.values(idx).flat().length;
+  if (!total) {
+    el.innerHTML = '<div class="topic-empty">No topics yet. Complete Day 1 to start the index.</div>'; return;
+  }
+  const meta = [
+    { key:'dsa',     label:'DSA',                 color:'var(--accent)'  },
+    { key:'backend', label:'Backend engineering',  color:'var(--info)'   },
+    { key:'system',  label:'System design',        color:'var(--purple)' },
+    { key:'impl',    label:'Implementation',       color:'var(--amber)'  },
+  ];
+  el.innerHTML = meta.map(m => {
+    const topics = idx[m.key] || [];
+    if (!topics.length) return '';
+    return `<div class="topic-block">
+      <h4 style="color:${m.color}">${m.label} — ${topics.length} topics</h4>
+      <div class="topic-tags">${topics.map(t => `<span class="topic-tag">${t}</span>`).join('')}</div>
+    </div>`;
+  }).join('') + `<p style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:8px">${total} topics across ${lsSessions().length} sessions</p>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// EXPORT / IMPORT
+// ═══════════════════════════════════════════════════════
+async function exportData() {
+  let data = { exported_at: new Date().toISOString(), sessions: lsSessions(), topic_index: lsTopics() };
+  if (backendOk) {
+    try { data = await apiFetch('/api/export'); } catch {}
+  }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `dpc-backup-${new Date().toISOString().split('T')[0]}.json`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+async function importData() {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = '.json';
+  input.onchange = async e => {
+    try {
+      const text = await e.target.files[0].text();
+      const data = JSON.parse(text);
+      if (data.sessions)     lsSaveSessions(data.sessions);
+      if (data.topic_index)  lsSaveTopics(data.topic_index);
+      if (backendOk) {
+        await apiFetch('/api/import', { method: 'POST', body: JSON.stringify(data) });
+      }
+      await updateHeaderStats();
+      alert(`Imported ${data.sessions?.length || 0} sessions.`);
+    } catch (e) {
+      alert('Import failed: ' + e.message);
+    }
+  };
+  input.click();
+}
+
+// ═══════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════
+function showTab(name) {
+  ['plan','history','topics'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t === name ? '' : 'none';
+    document.getElementById('tab-'+t+'-btn').classList.toggle('active', t === name);
+  });
+  if (name === 'history') renderHistory();
+  if (name === 'topics')  renderTopicIndex();
+}
+
+function toggleBlock(key) {
+  document.getElementById('body-'+key).classList.toggle('open');
+  document.getElementById('chev-'+key).classList.toggle('open');
+}
+
+function toggleHistory(idx) {
+  document.getElementById('hbody-'+idx).classList.toggle('open');
+}
+
+function showBanner(type, msg) {
+  document.getElementById('banner-wrap').innerHTML =
+    `<div class="banner ${type}"><span class="pulse-dot"></span><span>${msg}</span></div>`;
+}
+
+async function updateHeaderStats() {
+  const sessions   = lsSessions();
+  const topicIndex = lsTopics();
+  const days       = sessions.map(s => s.day).sort((a, b) => a - b);
+  const last       = days[days.length - 1] || 0;
+
+  document.getElementById('stat-day').textContent    = last || '—';
+  document.getElementById('stat-topics').textContent = Object.values(topicIndex).flat().length;
+
+  let streak = 0;
+  for (let i = days.length - 1; i >= 0; i--) {
+    if (i === days.length - 1 || days[i] === days[i+1] - 1) streak++;
+    else break;
+  }
+  document.getElementById('stat-streak').textContent = streak > 0 ? streak + 'd' : '0d';
+
+  if (sessions.length > 0) {
+    document.getElementById('dayNum').value = last + 1;
+    const topicCount = Object.values(topicIndex).flat().length;
+    showBanner('info', `Memory active — Day ${last} logged · ${topicCount} topics indexed`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+async function init() {
+  loadConfig();
+  setDot('checking');
+  const ok = await testConnection();
+  if (!ok && !cfg.url) setDot('local');
+  if (ok) await reseedIfNeeded();
+  await updateHeaderStats();
+}
+
+init();
+</script>
+</body>
+</html>
