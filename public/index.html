@@ -219,22 +219,24 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
         <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">AI provider</div>
         <div class="s-grid">
           <div class="s-field full">
-            <label>Base URL — Anthropic, OpenAI, Groq, Ollama, any OpenAI-compatible</label>
-            <input type="url" id="cfg-ai-url" placeholder="https://api.anthropic.com"/>
+            <label>API endpoint — paste the full URL you would use in curl</label>
+            <input type="url" id="cfg-ai-url" placeholder="https://ollama.com/api/chat"/>
           </div>
           <div class="s-field full">
             <label>API key</label>
-            <input type="password" id="cfg-ai-key" placeholder="sk-ant-... or sk-... or leave empty"/>
+            <input type="password" id="cfg-ai-key" placeholder="sk-ant-... or sk-... or Bearer token"/>
           </div>
           <div class="s-field full">
             <label>Model name</label>
-            <input type="text" id="cfg-ai-model" placeholder="claude-sonnet-4-20250514"/>
+            <input type="text" id="cfg-ai-model" placeholder="gpt-oss:120b"/>
           </div>
         </div>
         <div class="s-note" style="margin-top:8px">
-          Anthropic: api.anthropic.com → uses /v1/messages format<br/>
-          Everything else: uses OpenAI /v1/chat/completions format<br/>
-          Examples: api.openai.com · api.groq.com/openai · localhost:11434 (Ollama)
+          Ollama:    https://ollama.com/api/chat  →  gpt-oss:120b<br/>
+          Anthropic: https://api.anthropic.com    →  claude-sonnet-4-20250514<br/>
+          OpenAI:    https://api.openai.com       →  gpt-4o<br/>
+          Groq:      https://api.groq.com/openai  →  llama-3.3-70b-versatile<br/>
+          Ollama local: http://localhost:11434     →  llama3
         </div>
       </div>
       <div class="s-actions">
@@ -575,7 +577,7 @@ Use markdown (**bold**, \`code\`, - bullets, \`\`\`blocks\`\`\`) inside strings.
       headers: { 'Content-Type': 'application/json', 'x-user-key': cfg.userKey },
       body: JSON.stringify({
         apiKey:    cfg.aiKey   || '',
-        baseUrl:   cfg.aiUrl   || '',
+        endpoint:  cfg.aiUrl   || '',
         model:     cfg.aiModel || 'claude-sonnet-4-20250514',
         maxTokens: 4000,
         system:    systemPrompt,

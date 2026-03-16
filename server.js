@@ -1,8 +1,12 @@
 /**
  * server.js — SDE Coach API
  *
- * AI proxy supports any OpenAI-compatible endpoint OR Anthropic.
- * Detection is automatic based on the base URL provided.
+ * AI proxy accepts a full endpoint URL + detects provider format automatically.
+ *
+ * Supported formats:
+ *   Anthropic  → api.anthropic.com          → /v1/messages
+ *   Ollama     → ollama.com or /api/chat     → /api/chat  (native Ollama format)
+ *   OpenAI-compat → everything else          → /v1/chat/completions
  */
 
 const express = require('express');
@@ -30,68 +34,49 @@ app.get('/health', (_req, res) => {
   res.json({ ok: db.isHealthy(), ts: new Date().toISOString(), version: '2.0.0', storage: 'sqlite' });
 });
 
-// ── AI Proxy ──────────────────────────────────────────────────
-// Accepts from request body:
-//   apiKey   — the provider API key
-//   baseUrl  — e.g. https://api.openai.com or https://api.groq.com/openai
-//              defaults to Anthropic if not provided
-//   model    — e.g. gpt-4o, llama3-70b-8192, claude-sonnet-4-20250514
-//   system   — system prompt string
-//   userMsg  — user message string
-//   maxTokens
-//
-// Falls back to ANTHROPIC_API_KEY env var if no apiKey in body.
+// ── Provider detection ────────────────────────────────────────
+function detectProvider(endpointUrl) {
+  const u = endpointUrl.toLowerCase();
+  if (u.includes('anthropic.com'))       return 'anthropic';
+  if (u.includes('ollama.com') ||
+      u.includes('/api/chat') ||
+      u.includes('/api/generate'))        return 'ollama';
+  return 'openai'; // OpenAI, Groq, Together, Mistral, LM Studio, etc.
+}
 
-app.post('/api/generate', requireKey, async (req, res) => {
-  const {
-    apiKey:   bodyKey,
-    baseUrl:  bodyBase,
-    model:    bodyModel,
-    system,
-    userMsg,
-    maxTokens = 4000,
-  } = req.body;
+// Build request + extract text from response for each provider
+function buildRequest(provider, { model, system, userMsg, maxTokens, apiKey }) {
+  switch (provider) {
 
-  const apiKey  = bodyKey  || process.env.ANTHROPIC_API_KEY;
-  const baseUrl = (bodyBase || 'https://api.anthropic.com').replace(/\/$/, '');
-  const model   = bodyModel || process.env.MODEL || 'claude-sonnet-4-20250514';
-
-  if (!apiKey) {
-    return res.status(500).json({ error: 'No API key provided. Set one in the app settings or set ANTHROPIC_API_KEY on the server.' });
-  }
-
-  const isAnthropic = baseUrl.includes('anthropic.com');
-
-  try {
-    let upstreamRes, data;
-
-    if (isAnthropic) {
-      // ── Anthropic messages format ──────────────────────────
-      upstreamRes = await fetch(`${baseUrl}/v1/messages`, {
-        method: 'POST',
+    case 'anthropic':
+      return {
         headers: {
           'Content-Type':      'application/json',
           'x-api-key':         apiKey,
           'anthropic-version': '2023-06-01',
         },
+        body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: userMsg }] }),
+      };
+
+    case 'ollama':
+      return {
+        headers: {
+          'Content-Type':  'application/json',
+          ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {}),
+        },
         body: JSON.stringify({
           model,
-          max_tokens: maxTokens,
-          system,
-          messages: [{ role: 'user', content: userMsg }],
+          stream: false,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user',   content: userMsg },
+          ],
         }),
-      });
-      data = await upstreamRes.json();
-      // Normalise to { text } for frontend
-      const text = (data.content || []).map(c => c.text || '').join('');
-      res.status(upstreamRes.status).json({ text, raw: data });
+      };
 
-    } else {
-      // ── OpenAI-compatible chat completions format ──────────
-      // Works with: OpenAI, Groq, Together, Mistral, Ollama, LM Studio,
-      //             Anyscale, Fireworks, Perplexity, etc.
-      upstreamRes = await fetch(`${baseUrl}/v1/chat/completions`, {
-        method: 'POST',
+    case 'openai':
+    default:
+      return {
         headers: {
           'Content-Type':  'application/json',
           'Authorization': `Bearer ${apiKey}`,
@@ -104,16 +89,80 @@ app.post('/api/generate', requireKey, async (req, res) => {
             { role: 'user',   content: userMsg },
           ],
         }),
-      });
-      data = await upstreamRes.json();
-      // Normalise to { text } for frontend
-      const text = data.choices?.[0]?.message?.content || '';
-      res.status(upstreamRes.status).json({ text, raw: data });
+      };
+  }
+}
+
+function extractText(provider, data) {
+  switch (provider) {
+    case 'anthropic':
+      return (data.content || []).map(c => c.text || '').join('');
+    case 'ollama':
+      // /api/chat  → data.message.content
+      // /api/generate → data.response
+      return data?.message?.content || data?.response || '';
+    case 'openai':
+    default:
+      return data?.choices?.[0]?.message?.content || '';
+  }
+}
+
+// ── AI Proxy ──────────────────────────────────────────────────
+// Body params:
+//   endpoint  — full URL e.g. https://ollama.com/api/chat
+//               or base URL e.g. https://api.openai.com  (proxy appends path)
+//   apiKey    — provider API key (falls back to ANTHROPIC_API_KEY env var)
+//   model     — model name
+//   system    — system prompt
+//   userMsg   — user message
+//   maxTokens
+app.post('/api/generate', requireKey, async (req, res) => {
+  let {
+    endpoint,
+    apiKey:    bodyKey,
+    model,
+    system,
+    userMsg,
+    maxTokens = 4000,
+  } = req.body;
+
+  const apiKey = bodyKey || process.env.ANTHROPIC_API_KEY || '';
+
+  // Default endpoint
+  if (!endpoint) endpoint = 'https://api.anthropic.com';
+
+  // If user gave a base URL without a path, append the right path
+  const hasPath = new URL(endpoint).pathname.length > 1;
+  const provider = detectProvider(endpoint);
+
+  if (!hasPath) {
+    if (provider === 'anthropic') endpoint += '/v1/messages';
+    else if (provider === 'ollama') endpoint += '/api/chat';
+    else endpoint += '/v1/chat/completions';
+  }
+
+  if (!model) model = provider === 'anthropic' ? 'claude-sonnet-4-20250514' : 'gpt-4o';
+
+  console.log(`[ai] provider=${provider} endpoint=${endpoint} model=${model}`);
+
+  const { headers, body } = buildRequest(provider, { model, system, userMsg, maxTokens, apiKey });
+
+  try {
+    const upstream = await fetch(endpoint, { method: 'POST', headers, body });
+    const data     = await upstream.json();
+
+    if (!upstream.ok) {
+      const errMsg = data?.error?.message || data?.error || JSON.stringify(data);
+      console.error(`[ai] upstream error ${upstream.status}:`, errMsg);
+      return res.status(upstream.status).json({ error: errMsg, raw: data });
     }
 
+    const text = extractText(provider, data);
+    res.json({ text, provider, model, raw: data });
+
   } catch (err) {
-    console.error('AI proxy error:', err.message);
-    res.status(502).json({ error: 'AI API error: ' + err.message });
+    console.error('[ai] proxy error:', err.message);
+    res.status(502).json({ error: 'AI request failed: ' + err.message });
   }
 });
 
@@ -178,4 +227,4 @@ app.get('*', (_req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`SDE Coach running on :${PORT}`));
+app.listen(PORT, () => console.log(`SDE Coach on :${PORT}`));
