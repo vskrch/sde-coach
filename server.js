@@ -1,10 +1,8 @@
 /**
- * server.js — Daily Prep Coach API
+ * server.js — SDE Coach API
  *
- * Storage: SQLite via db.js
- * On Heroku: SQLite lives in /tmp (ephemeral per dyno session).
- * The frontend detects an empty backend on load and calls POST /api/reseed
- * to repopulate from its localStorage — so progress is never lost.
+ * AI proxy supports any OpenAI-compatible endpoint OR Anthropic.
+ * Detection is automatic based on the base URL provided.
  */
 
 const express = require('express');
@@ -14,14 +12,11 @@ const db      = require('./db');
 require('dotenv').config();
 
 const app = express();
-
 app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '4mb' }));
-
-// Serve the frontend HTML from /public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── Auth middleware ───────────────────────────────────────────
+// ── Auth ──────────────────────────────────────────────────────
 function requireKey(req, res, next) {
   const key = req.headers['x-user-key'];
   if (!key || key.length < 8)
@@ -32,115 +27,155 @@ function requireKey(req, res, next) {
 
 // ── Health ────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
-  res.json({
-    ok:      db.isHealthy(),
-    ts:      new Date().toISOString(),
-    version: '2.0.0',
-    storage: 'sqlite',
-  });
+  res.json({ ok: db.isHealthy(), ts: new Date().toISOString(), version: '2.0.0', storage: 'sqlite' });
 });
 
-// ── Sessions ─────────────────────────────────────────────────
+// ── AI Proxy ──────────────────────────────────────────────────
+// Accepts from request body:
+//   apiKey   — the provider API key
+//   baseUrl  — e.g. https://api.openai.com or https://api.groq.com/openai
+//              defaults to Anthropic if not provided
+//   model    — e.g. gpt-4o, llama3-70b-8192, claude-sonnet-4-20250514
+//   system   — system prompt string
+//   userMsg  — user message string
+//   maxTokens
+//
+// Falls back to ANTHROPIC_API_KEY env var if no apiKey in body.
 
-// GET all sessions
-app.get('/api/sessions', requireKey, (req, res) => {
+app.post('/api/generate', requireKey, async (req, res) => {
+  const {
+    apiKey:   bodyKey,
+    baseUrl:  bodyBase,
+    model:    bodyModel,
+    system,
+    userMsg,
+    maxTokens = 4000,
+  } = req.body;
+
+  const apiKey  = bodyKey  || process.env.ANTHROPIC_API_KEY;
+  const baseUrl = (bodyBase || 'https://api.anthropic.com').replace(/\/$/, '');
+  const model   = bodyModel || process.env.MODEL || 'claude-sonnet-4-20250514';
+
+  if (!apiKey) {
+    return res.status(500).json({ error: 'No API key provided. Set one in the app settings or set ANTHROPIC_API_KEY on the server.' });
+  }
+
+  const isAnthropic = baseUrl.includes('anthropic.com');
+
   try {
-    res.json(db.getSessions(req.userKey));
+    let upstreamRes, data;
+
+    if (isAnthropic) {
+      // ── Anthropic messages format ──────────────────────────
+      upstreamRes = await fetch(`${baseUrl}/v1/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type':      'application/json',
+          'x-api-key':         apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: maxTokens,
+          system,
+          messages: [{ role: 'user', content: userMsg }],
+        }),
+      });
+      data = await upstreamRes.json();
+      // Normalise to { text } for frontend
+      const text = (data.content || []).map(c => c.text || '').join('');
+      res.status(upstreamRes.status).json({ text, raw: data });
+
+    } else {
+      // ── OpenAI-compatible chat completions format ──────────
+      // Works with: OpenAI, Groq, Together, Mistral, Ollama, LM Studio,
+      //             Anyscale, Fireworks, Perplexity, etc.
+      upstreamRes = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: maxTokens,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user',   content: userMsg },
+          ],
+        }),
+      });
+      data = await upstreamRes.json();
+      // Normalise to { text } for frontend
+      const text = data.choices?.[0]?.message?.content || '';
+      res.status(upstreamRes.status).json({ text, raw: data });
+    }
+
   } catch (err) {
-    console.error('GET /api/sessions:', err.message);
-    res.status(500).json({ error: err.message });
+    console.error('AI proxy error:', err.message);
+    res.status(502).json({ error: 'AI API error: ' + err.message });
   }
 });
 
-// POST upsert one session
+// ── Sessions ──────────────────────────────────────────────────
+app.get('/api/sessions', requireKey, (req, res) => {
+  try { res.json(db.getSessions(req.userKey)); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/sessions', requireKey, (req, res) => {
   const session = req.body;
   if (!session?.day) return res.status(400).json({ error: 'day is required' });
-  try {
-    db.upsertSession(req.userKey, session);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('POST /api/sessions:', err.message);
-    res.status(500).json({ error: err.message });
-  }
+  try { db.upsertSession(req.userKey, session); res.json({ ok: true }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// DELETE one session
 app.delete('/api/sessions/:day', requireKey, (req, res) => {
-  try {
-    db.deleteSession(req.userKey, req.params.day);
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  try { db.deleteSession(req.userKey, req.params.day); res.json({ ok: true }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── Topic index ───────────────────────────────────────────────
-
-// GET topic index
 app.get('/api/topics', requireKey, (req, res) => {
-  try {
-    res.json(db.getTopicIndex(req.userKey));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  try { res.json(db.getTopicIndex(req.userKey)); }
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST merge new topics in
 app.post('/api/topics', requireKey, (req, res) => {
   try {
-    const existing = db.getTopicIndex(req.userKey);
-    const merged   = db.mergeTopics(existing, req.body);
+    const merged = db.mergeTopics(db.getTopicIndex(req.userKey), req.body);
     db.upsertTopicIndex(req.userKey, merged);
     res.json({ ok: true, total: Object.values(merged).flat().length });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Reseed — called by frontend after a dyno restart ─────────
-// Frontend sends its full localStorage state; backend repopulates SQLite.
+// ── Reseed ────────────────────────────────────────────────────
 app.post('/api/reseed', requireKey, (req, res) => {
   const { sessions = [], topic_index = {} } = req.body;
-  if (!sessions.length && !Object.keys(topic_index).length) {
-    return res.json({ ok: true, reseeded: 0, message: 'nothing to reseed' });
-  }
+  if (!sessions.length && !Object.keys(topic_index).length)
+    return res.json({ ok: true, reseeded: 0 });
   try {
     db.bulkImport(req.userKey, sessions, topic_index);
-    console.log(`[reseed] user=${req.userKey.slice(0,8)}… sessions=${sessions.length}`);
     res.json({ ok: true, reseeded: sessions.length });
-  } catch (err) {
-    console.error('POST /api/reseed:', err.message);
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Export — full backup ──────────────────────────────────────
+// ── Export / Import ───────────────────────────────────────────
 app.get('/api/export', requireKey, (req, res) => {
-  try {
-    const data = db.exportAll(req.userKey);
-    res.json({ exported_at: new Date().toISOString(), ...data });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  try { res.json({ exported_at: new Date().toISOString(), ...db.exportAll(req.userKey) }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Bulk import — restore from JSON backup ────────────────────
 app.post('/api/import', requireKey, (req, res) => {
   const { sessions = [], topic_index = {} } = req.body;
-  try {
-    db.bulkImport(req.userKey, sessions, topic_index);
-    res.json({ ok: true, sessions_imported: sessions.length });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  try { db.bulkImport(req.userKey, sessions, topic_index); res.json({ ok: true, sessions_imported: sessions.length }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Catch-all → serve frontend ────────────────────────────────
+// ── Catch-all → frontend ──────────────────────────────────────
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ── Start ─────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`DPC server running on :${PORT}`));
+app.listen(PORT, () => console.log(`SDE Coach running on :${PORT}`));

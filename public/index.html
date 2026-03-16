@@ -208,11 +208,33 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       <div class="s-grid">
         <div class="s-field full">
           <label>Backend URL (leave empty to use this same host)</label>
-          <input type="url" id="cfg-url" placeholder="https://daily-prep-coach.herokuapp.com"/>
+          <input type="url" id="cfg-url" placeholder="https://sde-coach-vsk.herokuapp.com"/>
         </div>
         <div class="s-field full">
-          <label>Your user key — save this in a password manager</label>
+          <label>Your user key — save this somewhere safe</label>
           <input type="text" id="cfg-key" placeholder="auto-generated"/>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">AI provider</div>
+        <div class="s-grid">
+          <div class="s-field full">
+            <label>Base URL — Anthropic, OpenAI, Groq, Ollama, any OpenAI-compatible</label>
+            <input type="url" id="cfg-ai-url" placeholder="https://api.anthropic.com"/>
+          </div>
+          <div class="s-field full">
+            <label>API key</label>
+            <input type="password" id="cfg-ai-key" placeholder="sk-ant-... or sk-... or leave empty"/>
+          </div>
+          <div class="s-field full">
+            <label>Model name</label>
+            <input type="text" id="cfg-ai-model" placeholder="claude-sonnet-4-20250514"/>
+          </div>
+        </div>
+        <div class="s-note" style="margin-top:8px">
+          Anthropic: api.anthropic.com → uses /v1/messages format<br/>
+          Everything else: uses OpenAI /v1/chat/completions format<br/>
+          Examples: api.openai.com · api.groq.com/openai · localhost:11434 (Ollama)
         </div>
       </div>
       <div class="s-actions">
@@ -222,9 +244,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
         <button class="s-btn" onclick="toggleSettings()">Close</button>
       </div>
       <div id="s-status" class="s-status"></div>
-      <div class="s-note">
-        Backend stores your data in SQLite. If the dyno restarts, your browser auto-reseeds it from localStorage on next load — nothing is ever lost. Export Backup JSON is your offline safety copy.
-      </div>
     </div>
   </div>
 
@@ -297,8 +316,11 @@ function getBaseURL() {
 function loadConfig() {
   try { cfg = { ...cfg, ...JSON.parse(localStorage.getItem(LS_CFG) || '{}') }; } catch {}
   if (!cfg.userKey) { cfg.userKey = crypto.randomUUID(); saveConfig(); }
-  document.getElementById('cfg-url').value = cfg.url || '';
-  document.getElementById('cfg-key').value = cfg.userKey;
+  document.getElementById('cfg-url').value      = cfg.url      || '';
+  document.getElementById('cfg-key').value      = cfg.userKey;
+  document.getElementById('cfg-ai-url').value   = cfg.aiUrl    || '';
+  document.getElementById('cfg-ai-key').value   = cfg.aiKey    || '';
+  document.getElementById('cfg-ai-model').value = cfg.aiModel  || '';
 }
 
 function saveConfig() {
@@ -317,6 +339,9 @@ function toggleSettings() {
 async function saveSettings() {
   cfg.url     = document.getElementById('cfg-url').value.trim().replace(/\/$/, '');
   cfg.userKey = document.getElementById('cfg-key').value.trim() || cfg.userKey;
+  cfg.aiUrl   = document.getElementById('cfg-ai-url').value.trim().replace(/\/$/, '');
+  cfg.aiKey   = document.getElementById('cfg-ai-key').value.trim();
+  cfg.aiModel = document.getElementById('cfg-ai-model').value.trim();
   saveConfig();
   const st = document.getElementById('s-status');
   st.className = 's-status info';
@@ -545,18 +570,21 @@ Each main field covers ~${Math.round(hours/4*10)/10} hours. Requirements:
 Use markdown (**bold**, \`code\`, - bullets, \`\`\`blocks\`\`\`) inside strings. Never repeat anything from the covered topics list.`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(`${getBaseURL()}/api/generate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-user-key': cfg.userKey },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: `Day: ${day}\nAvailable time: ${hours} hours\nBlocker: ${blocker || 'none'}` }],
+        apiKey:    cfg.aiKey   || '',
+        baseUrl:   cfg.aiUrl   || '',
+        model:     cfg.aiModel || 'claude-sonnet-4-20250514',
+        maxTokens: 4000,
+        system:    systemPrompt,
+        userMsg:   `Day: ${day}\nAvailable time: ${hours} hours\nBlocker: ${blocker || 'none'}`,
       }),
     });
     const data = await res.json();
-    const raw  = (data.content || []).map(c => c.text || '').join('');
+    if (data.error) throw new Error(data.error);
+    const raw  = data.text || '';
     let sections = {};
     try { sections = JSON.parse(raw.replace(/```json|```/g, '').trim()); }
     catch { sections = { dsa: raw, backend: '', system: '', impl: '', topics: {} }; }
